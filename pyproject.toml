@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jiraops"
+version = "0.1.0"
+description = "Deterministic, no-LLM, idempotent Jira operations from the command line — decompose bundled tickets and audit hierarchies."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "Fred Chong Rutherford" }]
+keywords = ["jira", "atlassian", "cli", "deterministic", "idempotent", "agile", "backlog"]
+# Zero third-party dependencies — stdlib only (urllib for the REST transport).
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/pyongwa/jiraops"
+
+[project.scripts]
+jiraops = "jiraops.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

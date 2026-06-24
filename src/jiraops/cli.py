@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""jiraops — deterministic Jira operations from the command line.
+
+Two commands, both deterministic and no-LLM:
+
+  jiraops decompose <file|->        parse a bundled description -> a per-item plan (offline)
+  jiraops decompose --issue KEY     read the issue from Jira, then plan (--apply to create)
+  jiraops audit --epic KEY          read an Epic's children from Jira, print a hygiene report
+
+The offline `decompose <file>` path needs no Jira and is fully deterministic.
+The live paths (`--issue`, `--epic`, `--apply`) use the REST transport and an
+Atlassian API token (env: ATLASSIAN_SITE / ATLASSIAN_EMAIL / ATLASSIAN_API_TOKEN).
+
+Idempotency: on `--apply`, each created child is labelled with the item's stable
+key; before creating, we search for that label and skip if it already exists, so
+re-running never duplicates.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from . import audit as _audit
+from . import decompose as _decompose
+from .transport import Config, Transport, TransportError
+
+LABEL_PREFIX = "jiraops-"  # stable-key label namespace written on created children
+
+
+# ---------------------------------------------------------------------------
+# ADF -> text (best-effort) so the deterministic parser can read a live issue.
+# Jira Cloud returns issue descriptions as ADF (Atlassian Document Format) JSON.
+# We reconstruct the markdown table/list shapes the parser expects. Plain
+# strings pass through unchanged.
+# ---------------------------------------------------------------------------
+
+def adf_to_text(node) -> str:
+    if node is None:
+        return ""
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, dict):
+        return ""
+    t = node.get("type")
+    if t == "text":
+        return node.get("text", "")
+    if t == "table":
+        return _adf_table(node)
+    children = node.get("content", []) or []
+    if t in ("bulletList", "orderedList"):
+        lines = []
+        for li in children:
+            txt = "".join(adf_to_text(c) for c in (li.get("content", []) or [])).strip()
+            if txt:
+                lines.append(f"- {txt}")
+        return "\n".join(lines)
+    if t in ("paragraph", "heading", "tableCell", "tableHeader", "listItem"):
+        return "".join(adf_to_text(c) for c in children)
+    # doc / unknown container: join block children with newlines
+    return "\n".join(s for s in (adf_to_text(c) for c in children) if s)
+
+
+def _adf_table(table) -> str:
+    rows = []
+    for row in table.get("content", []) or []:
+        cells = ["".join(adf_to_text(c) for c in (cell.get("content", []) or [])).strip()
+                 for cell in (row.get("content", []) or [])]
+        rows.append("| " + " | ".join(cells) + " |")
+    if len(rows) >= 1:
+        ncols = rows[0].count("|") - 1
+        sep = "| " + " | ".join(["---"] * max(ncols, 1)) + " |"
+        rows.insert(1, sep)  # synthetic separator so the parser detects a table
+    return "\n".join(rows)
+
+
+def _description_text(issue: dict) -> str:
+    desc = (issue.get("fields") or {}).get("description")
+    if isinstance(desc, str):
+        return desc
+    return adf_to_text(desc)
+
+
+# ---------------------------------------------------------------------------
+# decompose
+# ---------------------------------------------------------------------------
+
+def cmd_decompose(args) -> int:
+    if args.issue:
+        tx = _transport()
+        issue = tx.jira_get(args.issue, fields=["description", "project"])
+        text = _description_text(issue)
+        items = _decompose.parse(text)
+        if not args.apply:
+            print(_decompose.format_plan(items, parent=args.issue))
+            return 0
+        return _apply(tx, issue, args.issue, items, args.child_type)
+
+    # offline file/stdin path — fully deterministic, no Jira
+    text = sys.stdin.read() if args.file in (None, "-") else open(args.file, encoding="utf-8").read()
+    items = _decompose.parse(text)
+    if args.json:
+        print(json.dumps([it.as_dict() for it in items], indent=2))
+    else:
+        print(_decompose.format_plan(items, parent=args.parent))
+    return 0
+
+
+def _apply(tx: Transport, issue: dict, parent_key: str, items, child_type: str) -> int:
+    project = ((issue.get("fields") or {}).get("project") or {}).get("key")
+    if not project:
+        print(f"ERROR: could not resolve project for {parent_key}", file=sys.stderr)
+        return 2
+    created = skipped = 0
+    for it in items:
+        label = LABEL_PREFIX + it.key
+        existing = tx.jira_search(f'labels = "{label}"', fields=["key"], max_results=1)
+        if existing.get("issues"):
+            skipped += 1
+            print(f"skip  {it.title}  (exists: {label})")
+            continue
+        tx.jira_create(project, child_type, {
+            "summary": it.title,
+            "labels": [label],
+            "parent": {"key": parent_key},
+        })
+        created += 1
+        print(f"create {it.title}  ({label})")
+    print(f"\napply: {created} created, {skipped} skipped (idempotent). planned={len(items)}.")
+    return 0 if created + skipped == len(items) else 1
+
+
+# ---------------------------------------------------------------------------
+# audit
+# ---------------------------------------------------------------------------
+
+def cmd_audit(args) -> int:
+    tx = _transport()
+    jql = f'parent = {args.epic} ORDER BY status'
+    fields = ["summary", "status", "issuetype", "assignee", "updated"]
+    res = tx.jira_search(jql, fields=fields, max_results=args.max)
+    issues = [_compact(node) for node in res.get("issues", [])]
+
+    inv = _audit.inventory(issues)
+    out = _audit.outstanding(issues)
+    dupes = _audit.duplicates(issues, threshold=args.dup_threshold)
+    stale = _audit.stale(issues, args.stale_before) if args.stale_before else []
+
+    print(f"AUDIT {args.epic} — {inv['total']} children")
+    print(f"  by type:     {inv['by_type']}")
+    print(f"  by status:   {inv['by_status']}")
+    print(f"  by assignee: {inv['by_assignee']}")
+    print(f"  outstanding (not Done): {len(out)}")
+    if args.stale_before:
+        print(f"  stale (open, not updated since {args.stale_before}): {len(stale)}")
+        for i in stale:
+            print(f"     {i['key']}  {i['summary']}  (updated {i.get('updated','?')[:10]})")
+    if dupes:
+        print(f"  possible duplicates (>= {args.dup_threshold} summary overlap):")
+        for a, b, sim in dupes:
+            print(f"     {a} ~ {b}  ({sim:.2f})")
+    return 0
+
+
+def _compact(node: dict) -> dict:
+    f = node.get("fields", {}) or {}
+    status = f.get("status") or {}
+    assignee = f.get("assignee") or {}
+    return {
+        "key": node.get("key"),
+        "summary": f.get("summary") or "",
+        "type": (f.get("issuetype") or {}).get("name"),
+        "status": status.get("name"),
+        "statusCategory": (status.get("statusCategory") or {}).get("name"),
+        "assignee": assignee.get("displayName"),
+        "updated": f.get("updated"),
+    }
+
+
+# ---------------------------------------------------------------------------
+
+def _transport() -> Transport:
+    try:
+        return Transport(Config.from_env())
+    except TransportError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="jiraops", description="Deterministic Jira operations from the CLI.")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    d = sub.add_parser("decompose", help="Split a bundled ticket into one child per item.")
+    d.add_argument("file", nargs="?", help="File with the bundled description (or '-' for stdin). Offline.")
+    d.add_argument("--issue", help="Read the bundled description from this Jira issue key (live).")
+    d.add_argument("--apply", action="store_true", help="Create the child issues (default is dry-run).")
+    d.add_argument("--child-type", default="Task", help="Issue type for created children (default: Task).")
+    d.add_argument("--parent", default="<PARENT>", help="Parent label for the offline plan header.")
+    d.add_argument("--json", action="store_true", help="Emit items as JSON (offline path).")
+    d.set_defaults(func=cmd_decompose)
+
+    a = sub.add_parser("audit", help="Report hygiene for an Epic's children (read-only).")
+    a.add_argument("--epic", required=True, help="Epic (or parent) key to audit.")
+    a.add_argument("--stale-before", help="Flag open children not updated since this YYYY-MM-DD.")
+    a.add_argument("--dup-threshold", type=float, default=0.7, help="Summary-overlap threshold (default 0.7).")
+    a.add_argument("--max", type=int, default=100, help="Max children to fetch (default 100).")
+    a.set_defaults(func=cmd_audit)
+    return p
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

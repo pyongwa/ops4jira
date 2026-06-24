@@ -1,0 +1,13 @@
+# Licensing — jiraops
+
+Split-licensed, the same model as the rest of the Agentic Software Operations line:
+
+- **Documentation** (`README.md`, `PRIOR-ART.md`, `*.md`) — Creative Commons
+  Attribution 4.0 International (**CC-BY-4.0**). See `LICENSE-SPEC`.
+
+- **Code** (`src/`, `tests/`, `pyproject.toml`) — Functional Source License 1.1 with
+  an MIT future license (**FSL-1.1-MIT**). Free to use, modify, and redistribute for any
+  Permitted Purpose, but **not** to repackage-and-resell as a competing product; converts
+  to the MIT License two years after release. See `LICENSE-CODE`.
+
+Authored by Fred Chong Rutherford.
