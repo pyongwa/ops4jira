@@ -1,0 +1,15 @@
+Ops4Jira
+Copyright 2026 Fred Chong Rutherford
+
+This product's code is licensed under the Apache License, Version 2.0
+(see LICENSE-CODE). Documentation is licensed under CC-BY-4.0 (see LICENSE-SPEC).
+
+The name "Ops4Jira" and any associated identity are not licensed under Apache-2.0
+(per its Section 6, the license grants no trademark rights). You may build on and
+redistribute the code, including commercially; please do not present a fork,
+product, or company as "Ops4Jira." Calling your tool a fork of, or based on,
+Ops4Jira is fine.
+
+"Jira" is a trademark of Atlassian Pty Ltd. Ops4Jira is an independent project,
+not affiliated with or endorsed by Atlassian; "Jira" appears in the name only to
+describe the product the tool operates on.

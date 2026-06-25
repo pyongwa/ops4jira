@@ -6,7 +6,7 @@ Run: python3 meta/.claude/skills/jira-bundled-ticket-decomposer/test_decompose.p
 
 import unittest
 
-from jiraops import decompose
+from ops4jira import decompose
 
 
 TABLE = """

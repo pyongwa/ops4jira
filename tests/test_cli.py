@@ -1,9 +1,9 @@
-"""Tests for the jiraops CLI wiring (deterministic; no live calls)."""
+"""Tests for the Ops4Jira CLI wiring (deterministic; no live calls)."""
 import io
 import unittest
 from contextlib import redirect_stdout
 
-from jiraops import cli
+from ops4jira import cli
 
 
 class FakeTransport:
@@ -66,7 +66,7 @@ class TestApplyIdempotency(unittest.TestCase):
     ISSUE = {"fields": {"project": {"key": "EXEC"}}}
 
     def _items(self):
-        from jiraops import decompose
+        from ops4jira import decompose
         return decompose.parse("- alpha\n- beta\n")
 
     def test_apply_creates_then_skips_on_rerun(self):
@@ -87,7 +87,7 @@ class TestApplyIdempotency(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             cli._apply(tx, self.ISSUE, "EXEC-1", self._items(), "Task")
         _, _, fields = tx.created[0]
-        self.assertTrue(fields["labels"][0].startswith("jiraops-"))
+        self.assertTrue(fields["labels"][0].startswith("ops4jira-"))
         self.assertEqual(fields["parent"], {"key": "EXEC-1"})
 
 

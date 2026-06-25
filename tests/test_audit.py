@@ -5,7 +5,7 @@ Run: python3 test_audit.py
 
 import unittest
 
-from jiraops import audit
+from ops4jira import audit
 
 
 def issue(key, summary="", type="Story", status="To Do",
