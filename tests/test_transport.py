@@ -8,7 +8,7 @@ import json
 import os
 import unittest
 
-from jiraops import transport as A
+from ops4jira import transport as A
 
 
 def _cfg():

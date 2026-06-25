@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""jiraops — deterministic Jira operations from the command line.
+"""Ops4Jira — deterministic Jira operations from the command line.
 
 Two commands, both deterministic and no-LLM:
 
-  jiraops decompose <file|->        parse a bundled description -> a per-item plan (offline)
-  jiraops decompose --issue KEY     read the issue from Jira, then plan (--apply to create)
-  jiraops audit --epic KEY          read an Epic's children from Jira, print a hygiene report
+  ops4jira decompose <file|->        parse a bundled description -> a per-item plan (offline)
+  ops4jira decompose --issue KEY     read the issue from Jira, then plan (--apply to create)
+  ops4jira audit --epic KEY          read an Epic's children from Jira, print a hygiene report
 
 The offline `decompose <file>` path needs no Jira and is fully deterministic.
 The live paths (`--issue`, `--epic`, `--apply`) use the REST transport and an
@@ -25,7 +25,7 @@ from . import audit as _audit
 from . import decompose as _decompose
 from .transport import Config, Transport, TransportError
 
-LABEL_PREFIX = "jiraops-"  # stable-key label namespace written on created children
+LABEL_PREFIX = "ops4jira-"  # stable-key label namespace written on created children
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ def _transport() -> Transport:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="jiraops", description="Deterministic Jira operations from the CLI.")
+    p = argparse.ArgumentParser(prog="ops4jira", description="Deterministic Jira operations from the CLI.")
     sub = p.add_subparsers(dest="command", required=True)
 
     d = sub.add_parser("decompose", help="Split a bundled ticket into one child per item.")

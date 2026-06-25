@@ -1,13 +1,22 @@
-# Licensing — jiraops
+# Licensing — Ops4Jira
 
-Split-licensed, the same model as the rest of the Agentic Software Operations line:
+Split-licensed:
+
+- **Code** (`src/`, `tests/`, `pyproject.toml`) — Apache License 2.0
+  (**Apache-2.0**). Use, modify, and redistribute freely, commercially or not.
+  See [`LICENSE-CODE`](LICENSE-CODE).
 
 - **Documentation** (`README.md`, `PRIOR-ART.md`, `*.md`) — Creative Commons
-  Attribution 4.0 International (**CC-BY-4.0**). See `LICENSE-SPEC`.
+  Attribution 4.0 International (**CC-BY-4.0**). See [`LICENSE-SPEC`](LICENSE-SPEC).
 
-- **Code** (`src/`, `tests/`, `pyproject.toml`) — Functional Source License 1.1 with
-  an MIT future license (**FSL-1.1-MIT**). Free to use, modify, and redistribute for any
-  Permitted Purpose, but **not** to repackage-and-resell as a competing product; converts
-  to the MIT License two years after release. See `LICENSE-CODE`.
+## The name
+
+Apache-2.0 grants no rights to the project name (see its §6). "Ops4Jira" — the name
+and any associated identity — is **not** part of the license grant. Fork and build on
+the code freely, but please don't release a fork, product, or company *as* "Ops4Jira."
+Saying your tool is *based on* or *a fork of* Ops4Jira is fine. See [`NOTICE`](NOTICE).
+
+"Jira" is a trademark of Atlassian. Ops4Jira is not affiliated with or endorsed by
+Atlassian; the name uses "Jira" referentially to describe what the tool works with.
 
 Authored by Fred Chong Rutherford.
