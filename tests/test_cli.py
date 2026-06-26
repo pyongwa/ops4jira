@@ -109,5 +109,82 @@ class TestAuditProjection(unittest.TestCase):
         self.assertIsNone(c["type"])
 
 
+class TestCheckRefCommand(unittest.TestCase):
+    def _run(self, argv):
+        with redirect_stdout(io.StringIO()) as buf:
+            rc = cli.main(argv)
+        return rc, buf.getvalue()
+
+    def test_ref_present_exits_zero(self):
+        rc, _ = self._run(["check-ref", "--title", "[EXEC-456] Slice 2"])
+        self.assertEqual(rc, 0)
+
+    def test_refless_exits_one(self):
+        rc, out = self._run(["check-ref", "--title", "Paramount+ era triage tools"])
+        self.assertEqual(rc, 1)               # nonzero so it fails a CI gate / git hook
+        self.assertIn("no", out.lower())
+
+    def test_optout_exits_zero(self):
+        rc, _ = self._run(["check-ref", "--title", "tidy gitignore [no-ticket: chore]"])
+        self.assertEqual(rc, 0)
+
+    def test_title_and_body_combined(self):
+        # ref only in the body still passes
+        rc, _ = self._run(["check-ref", "--title", "no ref here", "--body", "closes EXEC-7"])
+        self.assertEqual(rc, 0)
+
+
+class FakeTransitionTransport:
+    """Stand-in transport for transition tests: canned status + transitions."""
+    def __init__(self, current_status, transitions):
+        self._status = current_status
+        self._transitions = transitions
+        self.transitioned = []
+
+    def jira_get(self, key, fields=None):
+        return {"fields": {"status": {"name": self._status}}}
+
+    def jira_transitions(self, key):
+        return {"transitions": self._transitions}
+
+    def jira_transition(self, key, transition_id):
+        self.transitioned.append((key, transition_id))
+        return {}
+
+
+TRS = [{"id": "31", "name": "Done", "to": {"name": "Done"}},
+       {"id": "21", "name": "Start", "to": {"name": "In Progress"}}]
+
+
+class TestTransitionCommand(unittest.TestCase):
+    def test_fires_transition_to_reach_target(self):
+        tx = FakeTransitionTransport("To Do", TRS)
+        with redirect_stdout(io.StringIO()):
+            rc = cli._do_transition(tx, "EXEC-1", "Done", dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(tx.transitioned, [("EXEC-1", "31")])
+
+    def test_already_in_target_is_noop(self):
+        tx = FakeTransitionTransport("Done", TRS)
+        with redirect_stdout(io.StringIO()):
+            rc = cli._do_transition(tx, "EXEC-1", "Done", dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(tx.transitioned, [])          # idempotent: no write
+
+    def test_dry_run_writes_nothing(self):
+        tx = FakeTransitionTransport("To Do", TRS)
+        with redirect_stdout(io.StringIO()):
+            rc = cli._do_transition(tx, "EXEC-1", "Done", dry_run=True)
+        self.assertEqual(rc, 0)
+        self.assertEqual(tx.transitioned, [])
+
+    def test_unreachable_target_errors(self):
+        tx = FakeTransitionTransport("To Do", TRS)
+        with redirect_stdout(io.StringIO()):
+            rc = cli._do_transition(tx, "EXEC-1", "In Review", dry_run=False)
+        self.assertEqual(rc, 2)                          # nonzero, no write
+        self.assertEqual(tx.transitioned, [])
+
+
 if __name__ == "__main__":
     unittest.main()

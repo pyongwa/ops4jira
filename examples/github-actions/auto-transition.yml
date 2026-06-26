@@ -1,0 +1,43 @@
+# Ops4Jira auto-transition on merge (EXEC-465).
+# Copy into a repo's .github/workflows/. When a PR merges, every
+# [EXEC-NNN]/[IDEA-NNN] it references is moved to the target status (default
+# Done) — the board updates itself, no card-dragging. Idempotent per ticket.
+#
+# Requires repo secrets: ATLASSIAN_SITE, ATLASSIAN_EMAIL, ATLASSIAN_API_TOKEN.
+name: ops4jira auto-transition
+on:
+  pull_request:
+    types: [closed]
+jobs:
+  transition:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      TARGET_STATUS: Done   # e.g. set to "In Review" on a release-branch workflow
+      ATLASSIAN_SITE: ${{ secrets.ATLASSIAN_SITE }}
+      ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install ops4jira
+        run: pip install "git+https://github.com/pyongwa/ops4jira.git"
+      - name: Transition referenced tickets
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Extract refs (pattern mirrors ops4jira.refgate); de-dup; transition each.
+          refs=$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" \
+                 | grep -oE '\b(EXEC|IDEA)-[0-9]+\b' | sort -u)
+          if [ -z "$refs" ]; then
+            echo "No ticket references in this PR — nothing to transition."
+            exit 0
+          fi
+          for r in $refs; do
+            echo "::group::transition $r -> $TARGET_STATUS"
+            ops4jira transition --issue "$r" --to "$TARGET_STATUS" \
+              || echo "::warning::could not transition $r (left unchanged)"
+            echo "::endgroup::"
+          done
