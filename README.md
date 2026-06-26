@@ -58,12 +58,46 @@ ops4jira audit --epic PROJ-100 --stale-before 2026-06-01   # also flag open item
 `audit` performs **no writes**. Duplicate detection is a deterministic summary-token overlap
 (Jaccard); stale detection takes the cutoff as an argument (no hidden "now").
 
+### Gate a merge on a ticket reference (offline)
+
+```bash
+ops4jira check-ref --title "[EXEC-456] Slice 2"      # exit 0: passes
+ops4jira check-ref --title "Paramount+ era triage"   # exit 1: no ref, no opt-out
+ops4jira check-ref --title "tidy [no-ticket: gitignore only]"   # exit 0: explicit opt-out
+git log -1 --format=%B | ops4jira check-ref          # check a commit message from stdin
+```
+
+Fully offline and deterministic — no Jira. Passes iff the text carries an `[EXEC-NNN]`/`[IDEA-NNN]`
+reference **or** an explicit `[no-ticket: reason]` opt-out (reason required, so a ticketless change
+is a recorded decision, not a silent miss). Exit 1 on failure, so it drops straight into a
+`commit-msg`/`pre-push` git hook or a PR check. Configurable keys via `--projects EXEC,IDEA,ABC`.
+
+### Auto-transition a ticket (idempotent, live)
+
+```bash
+ops4jira transition --issue PROJ-123 --to Done             # move it to Done (no-op if already there)
+ops4jira transition --issue PROJ-123 --to Done --dry-run   # print the plan, write nothing
+```
+
+Reads the issue's current status + the transitions Jira offers, then fires the one that reaches the
+target. Idempotent: already-in-target is a no-op (exit 0); an unreachable target is an error (exit 2,
+no write). Pairs with a PR-merge workflow so the board updates itself.
+
+### Run them in CI / git
+
+Drop-in templates live in [`examples/github-actions/`](examples/github-actions/): `ref-gate.yml`
+(fails ref-less PRs) and `auto-transition.yml` (on merge, moves every referenced ticket to Done).
+
 ## How it works
 
 - **Decompose** auto-detects a markdown table vs a list, derives a readable+hashed **stable key**
   per row (identical rows → identical key = idempotent; similar rows → distinct keys = no collision).
 - **Audit** reads workflow statuses from the data (never hardcoded); only Jira's `statusCategory`
   system field is treated as the canonical Done marker.
+- **Check-ref** is a pure text gate (no Jira): one regex for `PROJECT-NNN` refs, one for the
+  reasoned opt-out token — the *prevention* half of keeping every merge ticket-correlatable.
+- **Transition** decides deterministically (current status + offered transitions → no-op / fire /
+  unreachable); the live write is one REST call. The *automate* half: the board moves itself.
 - **Transport** is stdlib `urllib` against the Jira Cloud REST API with an API token.
 
 ## Prior art & alternatives

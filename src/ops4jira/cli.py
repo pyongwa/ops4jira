@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Ops4Jira — deterministic Jira operations from the command line.
 
-Two commands, both deterministic and no-LLM:
+Deterministic, no-LLM commands:
 
   ops4jira decompose <file|->        parse a bundled description -> a per-item plan (offline)
   ops4jira decompose --issue KEY     read the issue from Jira, then plan (--apply to create)
   ops4jira audit --epic KEY          read an Epic's children from Jira, print a hygiene report
+  ops4jira check-ref --title ...      gate: require an [EXEC-NNN]/[IDEA-NNN] ref (offline; exit 1 on fail)
+  ops4jira transition --issue KEY --to STATUS   move an issue to a status (idempotent; live)
 
 The offline `decompose <file>` path needs no Jira and is fully deterministic.
 The live paths (`--issue`, `--epic`, `--apply`) use the REST transport and an
@@ -23,6 +25,8 @@ import sys
 
 from . import audit as _audit
 from . import decompose as _decompose
+from . import refgate as _refgate
+from . import transition as _transition
 from .transport import Config, Transport, TransportError
 
 LABEL_PREFIX = "ops4jira-"  # stable-key label namespace written on created children
@@ -178,6 +182,47 @@ def _compact(node: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# check-ref  (EXEC-464) — deterministic, offline pre-merge gate
+# ---------------------------------------------------------------------------
+
+def cmd_check_ref(args) -> int:
+    if args.title is not None or args.body is not None:
+        text = "\n".join(p for p in (args.title, args.body) if p)
+    else:
+        text = sys.stdin.read() if args.file in (None, "-") else open(args.file, encoding="utf-8").read()
+    projects = tuple(p.strip() for p in args.projects.split(",") if p.strip())
+    r = _refgate.check(text, projects=projects)
+    print(f"{'PASS' if r.ok else 'FAIL'}: {r.reason}")
+    return 0 if r.ok else 1
+
+
+# ---------------------------------------------------------------------------
+# transition  (EXEC-465) — idempotent status write
+# ---------------------------------------------------------------------------
+
+def _do_transition(tx, issue: str, target: str, dry_run: bool) -> int:
+    cur = (((tx.jira_get(issue, fields=["status"]).get("fields") or {}).get("status") or {}).get("name"))
+    trs = tx.jira_transitions(issue).get("transitions", []) or []
+    plan = _transition.plan(cur, trs, target)
+    if dry_run:
+        print(f"dry-run {issue}: {plan.action} — {plan.reason}")
+        return 0
+    if plan.action == "noop":
+        print(f"{issue}: {plan.reason} (no-op, idempotent)")
+        return 0
+    if plan.action == "unreachable":
+        print(f"ERROR {issue}: {plan.reason}", file=sys.stderr)
+        return 2
+    tx.jira_transition(issue, plan.transition_id)
+    print(f"{issue}: {plan.reason} — done")
+    return 0
+
+
+def cmd_transition(args) -> int:
+    return _do_transition(_transport(), args.issue, args.to, args.dry_run)
+
+
+# ---------------------------------------------------------------------------
 
 def _transport() -> Transport:
     try:
@@ -206,6 +251,19 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--dup-threshold", type=float, default=0.7, help="Summary-overlap threshold (default 0.7).")
     a.add_argument("--max", type=int, default=100, help="Max children to fetch (default 100).")
     a.set_defaults(func=cmd_audit)
+
+    c = sub.add_parser("check-ref", help="Gate: require an [EXEC-NNN]/[IDEA-NNN] ref (or [no-ticket: reason]). Offline; exit 1 on fail.")
+    c.add_argument("file", nargs="?", help="File with the text to check (or '-'/omitted for stdin).")
+    c.add_argument("--title", help="PR/commit title to check.")
+    c.add_argument("--body", help="PR/commit body (combined with --title).")
+    c.add_argument("--projects", default="EXEC,IDEA", help="Comma-separated project keys (default EXEC,IDEA).")
+    c.set_defaults(func=cmd_check_ref)
+
+    t = sub.add_parser("transition", help="Transition an issue to a target status (idempotent; live).")
+    t.add_argument("--issue", required=True, help="Issue key to transition.")
+    t.add_argument("--to", required=True, help="Target status name (e.g. Done).")
+    t.add_argument("--dry-run", action="store_true", help="Print the plan; write nothing.")
+    t.set_defaults(func=cmd_transition)
     return p
 
 

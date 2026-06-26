@@ -83,6 +83,13 @@ class JiraTests(unittest.TestCase):
         self.assertTrue(call["url"].endswith("/rest/api/3/issue/EXEC-1/transitions"))
         self.assertEqual(call["body"], {"transition": {"id": "31"}})
 
+    def test_transitions_is_get(self):
+        self.t.jira_transitions("EXEC-1")
+        call = self.rec.calls[0]
+        self.assertEqual(call["method"], "GET")
+        self.assertTrue(call["url"].endswith("/rest/api/3/issue/EXEC-1/transitions"))
+        self.assertIsNone(call["body"])
+
     def test_get_appends_fields_query(self):
         self.t.jira_get("EXEC-1", fields=["summary", "status"])
         self.assertIn("?fields=summary,status", self.rec.calls[0]["url"])

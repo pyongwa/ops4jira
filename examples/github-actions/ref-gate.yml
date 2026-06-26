@@ -1,0 +1,24 @@
+# Ops4Jira pre-merge ref-gate (EXEC-464).
+# Copy into a repo's .github/workflows/. Fails any PR whose title+body carry
+# neither an [EXEC-NNN]/[IDEA-NNN] reference nor an explicit [no-ticket: reason]
+# opt-out — so every merge stays correlatable to a ticket (the data the ambient
+# audit + gap-probe depend on). Deterministic, offline, no secrets needed.
+name: ops4jira ref-gate
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  ref-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install ops4jira
+        run: pip install "git+https://github.com/pyongwa/ops4jira.git"
+      - name: Require a ticket reference (or an explicit opt-out)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: ops4jira check-ref --title "$PR_TITLE" --body "$PR_BODY"
+        # exit 1 fails the check; make it a required status check to block merge.

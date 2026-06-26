@@ -78,6 +78,10 @@ class Transport:
         # 204 No Content on success; normalize to a dict.
         return self._send("PUT", f"/rest/api/3/issue/{key}", {"fields": fields})
 
+    def jira_transitions(self, key: str) -> dict:
+        # Available transitions for the issue's current status (id + to.name).
+        return self._send("GET", f"/rest/api/3/issue/{key}/transitions")
+
     def jira_transition(self, key: str, transition_id: str) -> dict:
         return self._send("POST", f"/rest/api/3/issue/{key}/transitions",
                           {"transition": {"id": transition_id}})
