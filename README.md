@@ -119,9 +119,9 @@ Split-licensed — see [`LICENSE`](LICENSE): code **Apache-2.0** ([`LICENSE-CODE
 docs **CC-BY-4.0** ([`LICENSE-SPEC`](LICENSE-SPEC)). See [`NOTICE`](NOTICE) for attribution and
 the name reservation.
 
-I'm **Fred Chong Rutherford** — 20+ years running delivery in Jira and agile frameworks (CSPO, CSM,
-SAFe). I built Ops4Jira because I kept re-doing the same two backlog chores by hand; now it does them
-the same way every time.
+I've spent 20+ years running delivery in Jira and agile frameworks (CSPO, CSM, SAFe). I built
+Ops4Jira because I kept re-doing the same two backlog chores by hand — now it does them the same way
+every time.
 
 ---
 
