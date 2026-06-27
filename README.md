@@ -121,3 +121,12 @@ the name reservation.
 
 By **Fred Chong Rutherford** — 20+ years with Jira/Atlassian and agile frameworks (CSPO, CSM, SAFe).
 Part of the Agentic Software Operations line.
+
+---
+
+Part of **Agentic Software Operations** — an open-source line for running software operations through AI coding agents:
+
+- **[Ops4Jira](https://github.com/pyongwa/ops4jira)** — deterministic, no-LLM Jira CLI (decompose · audit · ref-gate)
+- **[Ops4Atlassian](https://github.com/pyongwa/ops4atlassian)** — Jira + Confluence substrate skills for AI agents
+- **[Product Ops 2.0](https://github.com/pyongwa/product-ops-2)** — the operating-model layer
+- **[Agentic Software Operations](https://github.com/pyongwa/agentic-software-operations)** — the two above, composed into one install
