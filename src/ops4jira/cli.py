@@ -24,6 +24,7 @@ import argparse
 import json
 import sys
 
+from . import __version__
 from . import audit as _audit
 from . import decompose as _decompose
 from . import refgate as _refgate
@@ -180,6 +181,7 @@ def _transport() -> Transport:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ops4jira", description="Deterministic Jira operations from the CLI.")
+    p.add_argument("--version", "-V", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     d = sub.add_parser("decompose", help="Plan one child per item from a bundled ticket (read-only).")

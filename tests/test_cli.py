@@ -79,5 +79,15 @@ class TestCheckRefCommand(unittest.TestCase):
         self.assertEqual(rc, 0)
 
 
+class TestVersionFlag(unittest.TestCase):
+    def test_version_prints_and_exits_zero(self):
+        from ops4jira import __version__
+        with redirect_stdout(io.StringIO()) as buf:
+            with self.assertRaises(SystemExit) as cm:
+                cli.main(["--version"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn(__version__, buf.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
